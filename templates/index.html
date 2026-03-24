@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PixelShift — Image Converter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --border: #1e1e2e;
+      --accent: #00ff88;
+      --accent2: #ff6b35;
+      --text: #e8e8f0;
+      --muted: #555568;
+      --card: #13131c;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .glow-orb {
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.12;
+    }
+    .glow-orb-1 { background: var(--accent); top: -200px; left: -200px; }
+    .glow-orb-2 { background: var(--accent2); bottom: -200px; right: -200px; }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    .logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(52px, 10vw, 88px);
+      letter-spacing: 4px;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--accent) 0%, #00ccff 50%, var(--accent) 100%);
+      background-size: 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 4s ease infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .tagline {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 6px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.6;
+    }
+
+    /* Mode Toggle */
+    .mode-toggle {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 32px;
+      gap: 4px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 9px;
+      cursor: pointer;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.2s ease;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .mode-btn.active {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 0 20px rgba(0,255,136,0.3);
+    }
+
+    .mode-btn:not(.active):hover {
+      color: var(--text);
+      background: var(--border);
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 60px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      background: rgba(255,255,255,0.01);
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(0,255,136,0.04);
+      transform: scale(1.01);
+    }
+
+    .drop-zone.has-file {
+      border-color: var(--accent);
+      border-style: solid;
+    }
+
+    .drop-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+    .drop-zone:hover .drop-icon { transform: translateY(-4px) scale(1.1); }
+
+    .drop-label {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .drop-sub {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+    }
+
+    #fileInput { display: none; }
+
+    /* Preview */
+    .preview-wrap {
+      display: none;
+      margin-top: 16px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      position: relative;
+    }
+
+    .preview-wrap img {
+      width: 100%;
+      max-height: 280px;
+      object-fit: contain;
+      background: repeating-conic-gradient(#1a1a2e 0% 25%, #111118 0% 50%) 0 0 / 20px 20px;
+      display: block;
+    }
+
+    .preview-badge {
+      position: absolute;
+      top: 12px; right: 12px;
+      background: rgba(0,0,0,0.8);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+    }
+
+    .file-info {
+      display: none;
+      margin-top: 12px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .file-info span { color: var(--text); }
+
+    .btn-clear {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      transition: all 0.2s;
+    }
+    .btn-clear:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    /* Convert Button */
+    .convert-btn {
+      width: 100%;
+      margin-top: 24px;
+      padding: 18px;
+      border: none;
+      border-radius: 14px;
+      background: var(--accent);
+      color: #000;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px;
+      letter-spacing: 3px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .convert-btn::before {
+      content: '';
+      position: absolute;
+      top: 50%; left: -100%;
+      width: 60px; height: 200%;
+      background: rgba(255,255,255,0.3);
+      transform: translateY(-50%) skewX(-20deg);
+      transition: left 0.5s ease;
+    }
+    .convert-btn:hover::before { left: 130%; }
+    .convert-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,255,136,0.35); }
+    .convert-btn:active { transform: translateY(0); }
+    .convert-btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
+    .convert-btn:disabled::before { display: none; }
+
+    /* Status */
+    .status {
+      margin-top: 16px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+    .status.loading { display: flex; background: rgba(0,204,255,0.08); border: 1px solid rgba(0,204,255,0.2); color: #00ccff; }
+    .status.success { display: flex; background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.2); color: var(--accent); }
+    .status.error { display: flex; background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.2); color: var(--accent2); }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(0,204,255,0.2);
+      border-top-color: #00ccff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* How it works */
+    .how-section {
+      margin-top: 40px;
+    }
+
+    .section-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .step-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 36px;
+      color: var(--accent);
+      opacity: 0.4;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .step-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .step-desc {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 48px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      position: relative;
+      z-index: 1;
+    }
+
+    footer span { color: var(--accent); }
+
+    @media (max-width: 600px) {
+      .card { padding: 24px; }
+      .steps { grid-template-columns: 1fr; }
+      .drop-zone { padding: 40px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="glow-orb glow-orb-1"></div>
+<div class="glow-orb glow-orb-2"></div>
+
+<div class="container">
+  <header>
+    <div class="logo">PixelShift</div>
+    <div class="tagline">JPG ⟷ PNG · Free · Instant · Private</div>
+  </header>
+
+  <div class="card">
+    <!-- Mode Toggle -->
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btn-jpg-png" onclick="setMode('jpg_to_png')">
+        JPG → PNG
+      </button>
+      <button class="mode-btn" id="btn-png-jpg" onclick="setMode('png_to_jpg')">
+        PNG → JPG
+      </button>
+    </div>
+
+    <!-- Drop Zone -->
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+         ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+      <span class="drop-icon" id="dropIcon">🖼️</span>
+      <div class="drop-label" id="dropLabel">Drop your image here</div>
+      <div class="drop-sub" id="dropSub">or click to browse · Max 16MB</div>
+    </div>
+
+    <input type="file" id="fileInput" accept=".jpg,.jpeg,.png" onchange="handleFileSelect(event)"/>
+
+    <!-- Preview -->
+    <div class="preview-wrap" id="previewWrap">
+      <img id="previewImg" src="" alt="Preview"/>
+      <div class="preview-badge" id="previewBadge">ORIGINAL</div>
+    </div>
+
+    <!-- File Info -->
+    <div class="file-info" id="fileInfo">
+      <div>
+        📄 <span id="fileName">—</span> &nbsp;·&nbsp; <span id="fileSize">—</span>
+      </div>
+      <button class="btn-clear" onclick="clearFile()">✕ Clear</button>
+    </div>
+
+    <!-- Convert Button -->
+    <button class="convert-btn" id="convertBtn" onclick="convert()" disabled>
+      Convert Image
+    </button>
+
+    <!-- Status -->
+    <div class="status" id="statusBox">
+      <div class="spinner" id="statusSpinner" style="display:none"></div>
+      <span id="statusText"></span>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="how-section">
+    <div class="section-label">How it works</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-title">Choose Mode</div>
+        <div class="step-desc">Select JPG→PNG or PNG→JPG</div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-title">Upload Image</div>
+        <div class="step-desc">Drop your file or click to browse</div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-title">Download</div>
+        <div class="step-desc">Click convert & save instantly</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built with <span>Flask + Pillow</span> · Files never stored on server · 100% private
+  </footer>
+</div>
+
+<script>
+  let currentMode = 'jpg_to_png';
+  let selectedFile = null;
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btn-jpg-png').classList.toggle('active', mode === 'jpg_to_png');
+    document.getElementById('btn-png-jpg').classList.toggle('active', mode === 'png_to_jpg');
+
+    // Update accepted file types
+    const input = document.getElementById('fileInput');
+    if (mode === 'jpg_to_png') {
+      input.accept = '.jpg,.jpeg';
+      document.getElementById('dropSub').textContent = 'JPG files only · Max 16MB';
+    } else {
+      input.accept = '.png';
+      document.getElementById('dropSub').textContent = 'PNG files only · Max 16MB';
+    }
+
+    clearFile();
+    hideStatus();
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.add('drag-over');
+  }
+
+  function handleDragLeave(e) {
+    document.getElementById('dropZone').classList.remove('drag-over');
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) processFile(file);
+  }
+
+  function processFile(file) {
+    // Validate extension
+    const ext = file.name.split('.').pop().toLowerCase();
+    const validJpg = ['jpg', 'jpeg'];
+    const validPng = ['png'];
+    const valid = currentMode === 'jpg_to_png' ? validJpg.includes(ext) : validPng.includes(ext);
+
+    if (!valid) {
+      showStatus('error', `Please upload a ${currentMode === 'jpg_to_png' ? 'JPG' : 'PNG'} file for this conversion.`);
+      return;
+    }
+
+    if (file.size > 16 * 1024 * 1024) {
+      showStatus('error', 'File too large. Maximum size is 16MB.');
+      return;
+    }
+
+    selectedFile = file;
+    hideStatus();
+
+    // Update drop zone
+    document.getElementById('dropZone').classList.add('has-file');
+    document.getElementById('dropIcon').textContent = '✅';
+    document.getElementById('dropLabel').textContent = file.name;
+    document.getElementById('dropSub').textContent = 'File ready · Click below to convert';
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('previewImg').src = e.target.result;
+      document.getElementById('previewWrap').style.display = 'block';
+      document.getElementById('previewBadge').textContent = ext.toUpperCase();
+    };
+    reader.readAsDataURL(file);
+
+    // Show file info
+    const info = document.getElementById('fileInfo');
+    info.style.display = 'flex';
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = formatBytes(file.size);
+
+    document.getElementById('convertBtn').disabled = false;
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('dropZone').classList.remove('has-file');
+    document.getElementById('dropIcon').textContent = '🖼️';
+    document.getElementById('dropLabel').textContent = 'Drop your image here';
+    document.getElementById('dropSub').textContent = currentMode === 'jpg_to_png' ? 'JPG files only · Max 16MB' : 'PNG files only · Max 16MB';
+    document.getElementById('previewWrap').style.display = 'none';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('convertBtn').disabled = true;
+    hideStatus();
+  }
+
+  async function convert() {
+    if (!selectedFile) return;
+
+    const btn = document.getElementById('convertBtn');
+    btn.disabled = true;
+    btn.textContent = 'Converting...';
+    showStatus('loading', 'Processing your image...');
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('conversion_type', currentMode);
+
+    try {
+      const response = await fetch('/convert', { method: 'POST', body: formData });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Conversion failed');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      // Auto download
+      const a = document.createElement('a');
+      const ext = currentMode === 'jpg_to_png' ? 'png' : 'jpg';
+      a.href = url;
+      a.download = selectedFile.name.replace(/\.[^.]+$/, '') + '.' + ext;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showStatus('success', `✓ Converted successfully! Your ${ext.toUpperCase()} file is downloading.`);
+
+    } catch (err) {
+      showStatus('error', '✕ ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Convert Image';
+    }
+  }
+
+  function showStatus(type, msg) {
+    const box = document.getElementById('statusBox');
+    const spinner = document.getElementById('statusSpinner');
+    const text = document.getElementById('statusText');
+    box.className = `status ${type}`;
+    spinner.style.display = type === 'loading' ? 'block' : 'none';
+    text.textContent = msg;
+  }
+
+  function hideStatus() {
+    document.getElementById('statusBox').className = 'status';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+</script>
+</body>
+</html>
